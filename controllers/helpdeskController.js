@@ -2,7 +2,10 @@ const HelpdeskModle = require('../Modles/helpdeskModle')
 
 const addBlog = async (req, res) => {
     const recievedArray = req.body;
-    const blog = recievedArray[0];
+    const userId = req.user._id.toString();
+    let blog = recievedArray[0];
+    blog = {...blog,userId:userId};
+    console.log("blog recieved",blog);
     let LocalArray = recievedArray[1].map(key => {
         return (Number(key));
     })
@@ -15,7 +18,7 @@ const addBlog = async (req, res) => {
             { new: true, upsert: true }
         );
         if (blogCreated) {
-            const allBlogs = await HelpdeskModle.find();
+            const allBlogs = await HelpdeskModle.find({userId});
             const allBlogIndexes = allBlogs.map(obj => obj.blogindex);
             console.log("allBlogIndexes", allBlogIndexes);
             console.log("allBlogs", allBlogs);
@@ -42,13 +45,17 @@ const addBlog = async (req, res) => {
     }
 }
 
-
 const addMenu = async (req, res) => {
     const menu = req.body;
     const blogid = req.params.blogIndex;
+    const requestUserId = req.user._id.toString();
     console.log("menu", menu);
-    console.log("blogid", blogid)
     try {
+        let Blogrequired = await HelpdeskModle.find({blogindex:blogid});
+        const BlogUserId = Blogrequired[0].userId;
+        if(BlogUserId!==requestUserId){
+            return res.status(400).json("You are not the creator of this content");
+        }
         const blog = await HelpdeskModle.findOne({ blogindex: blogid });
         if (blog) {
             const blogCopy = JSON.parse(JSON.stringify(blog));
@@ -134,7 +141,10 @@ const addMenu = async (req, res) => {
 const addContent = async (req, res) => {
     const blogIndex = req.params.blogIndex;
     const menuIndex = req.params.menuIndex;
-    const content = req.body;
+    let content = req.body;
+    console.log("content",content);
+    const userId = req.user._id.toString();
+    content = {...content,userId:userId}
     const { index, type, text } = req.body;
 
     if (!index || !type || !text) {
@@ -143,6 +153,13 @@ const addContent = async (req, res) => {
 
 
     try {
+        const Blog = await HelpdeskModle.find({blogindex:blogIndex});
+        const BlogUserId = Blog[0].userId;
+
+        if(BlogUserId!==userId){
+            return res.status(400).json("You are not the creator of this content");
+        }
+
         const contentCreated = await HelpdeskModle.findOneAndUpdate(
             { blogindex: blogIndex },
             { $set: { [`blogMenus.${menuIndex}.content.${content.index}`]: content } },
@@ -167,13 +184,16 @@ const addContent = async (req, res) => {
     }
 }
 
-const getAllBlogsList = async (req, res) => {
+const getAllBlogsList_user = async (req, res) => {
     try {
-        const blogs = await HelpdeskModle.find();
+        const userId = req.user._id.toString();
+        const blogs = await HelpdeskModle.find({userId});
+        console.log("blogs",blogs);
         const blogsDetails = blogs.map(obj => {
             return ({
                 blogindex: obj.blogindex,
-                blogHeading: obj.blogHeading
+                blogHeading: obj.blogHeading,
+                blogOwner: obj.userId
             })
         })
         blogsDetails.reverse();
@@ -188,8 +208,28 @@ const getAllBlogsList = async (req, res) => {
     }
 
 }
+const getAllBlogsList = async (req, res) => {
+    try {
+        const blogs = await HelpdeskModle.find();
+        const blogsDetails = blogs.map(obj => {
+            return ({
+                blogindex: obj.blogindex,
+                blogHeading: obj.blogHeading,
+                blogOwner: obj.userId
+            })
+        })
+        blogsDetails.reverse();
+        if (blogs) {
+            res.status(200).json(blogsDetails);
+        } else {
+            res.status(503).json('No Blogs Found');
+        }
+    }
+    catch (error) {
+        console.log(error.message);
+    }
 
-
+}
 
 const blogRequested = async (req, res) => {
     const blogId = req.params.blogindex;
@@ -209,9 +249,9 @@ const blogRequested = async (req, res) => {
                 })
                 allMenus.reverse();
                 const firstMenuItem = alpha[allMenus[0].blogMenuId]
-                res.status(200).json([wholeBlog.blogHeading, allMenus, firstMenuItem])
+                res.status(200).json([wholeBlog.blogHeading, allMenus, firstMenuItem,wholeBlog.userId])
             } else {
-                res.status(201).json(wholeBlog.blogHeading);
+                res.status(201).json([wholeBlog.blogHeading,"","",wholeBlog.userId]);
             }
         } else {
             res.status(404).json("No Blog found");
@@ -239,7 +279,7 @@ const menuRequested = async (req, res) => {
                     })
                 })
                 const menuItem = alpha[MenuId]
-                res.status(200).json([allMenus, menuItem])
+                res.status(200).json([allMenus, menuItem,completeBlog[0].userId])
             } else {
                 res.status(200).json("Menu Does not exist")
             }
@@ -349,4 +389,4 @@ const deleteContent = async (req, res) => {
     }
 };
 
-module.exports = { addBlog, addMenu, addContent, getAllBlogsList, deleteBlog, blogRequested, menuRequested, deleteMenu, deleteContent };
+module.exports = { addBlog, addMenu, addContent, getAllBlogsList,getAllBlogsList_user, deleteBlog, blogRequested, menuRequested, deleteMenu, deleteContent };

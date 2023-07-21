@@ -1,4 +1,5 @@
 const helpdeskRoutes = require('./routes/helpdeskRoutes')
+const userRoutes = require('./routes/userRoutes')
 require('dotenv').config();
 const express = require('express');
 const app=express();
@@ -26,3 +27,4 @@ app.use((req,res,next)=>{
 })
 
 app.use('/helpdesk',helpdeskRoutes);
+app.use('/user',userRoutes);
