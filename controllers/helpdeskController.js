@@ -1,11 +1,13 @@
-const HelpdeskModle = require('../Modles/helpdeskModle')
+const HelpdeskModle = require('../Modles/helpdeskModle');
+const userModle = require('../Modles/userModle');
+const cloudinary = require('../utils/cloudinary');
 
 const addBlog = async (req, res) => {
     const recievedArray = req.body;
     const userId = req.user._id.toString();
     let blog = recievedArray[0];
-    blog = {...blog,userId:userId};
-    console.log("blog recieved",blog);
+    blog = { ...blog, userId: userId };
+    console.log("blog recieved", blog);
     let LocalArray = recievedArray[1].map(key => {
         return (Number(key));
     })
@@ -18,7 +20,7 @@ const addBlog = async (req, res) => {
             { new: true, upsert: true }
         );
         if (blogCreated) {
-            const allBlogs = await HelpdeskModle.find({userId});
+            const allBlogs = await HelpdeskModle.find({ userId });
             const allBlogIndexes = allBlogs.map(obj => obj.blogindex);
             console.log("allBlogIndexes", allBlogIndexes);
             console.log("allBlogs", allBlogs);
@@ -51,9 +53,9 @@ const addMenu = async (req, res) => {
     const requestUserId = req.user._id.toString();
     console.log("menu", menu);
     try {
-        let Blogrequired = await HelpdeskModle.find({blogindex:blogid});
+        let Blogrequired = await HelpdeskModle.find({ blogindex: blogid });
         const BlogUserId = Blogrequired[0].userId;
-        if(BlogUserId!==requestUserId){
+        if (BlogUserId !== requestUserId) {
             return res.status(400).json("You are not the creator of this content");
         }
         const blog = await HelpdeskModle.findOne({ blogindex: blogid });
@@ -86,7 +88,6 @@ const addMenu = async (req, res) => {
                     } else {
                         return res.status(404).json({ error: 'Blog not found' });
                     }
-
                 } else {
                     console.log("I have came here");
                     const menuCreated = await HelpdeskModle.findOneAndUpdate(
@@ -142,9 +143,9 @@ const addContent = async (req, res) => {
     const blogIndex = req.params.blogIndex;
     const menuIndex = req.params.menuIndex;
     let content = req.body;
-    console.log("content",content);
+    console.log("content", content);
     const userId = req.user._id.toString();
-    content = {...content,userId:userId}
+    content = { ...content, userId: userId }
     const { index, type, text } = req.body;
 
     if (!index || !type || !text) {
@@ -153,10 +154,10 @@ const addContent = async (req, res) => {
 
 
     try {
-        const Blog = await HelpdeskModle.find({blogindex:blogIndex});
+        const Blog = await HelpdeskModle.find({ blogindex: blogIndex });
         const BlogUserId = Blog[0].userId;
 
-        if(BlogUserId!==userId){
+        if (BlogUserId !== userId) {
             return res.status(400).json("You are not the creator of this content");
         }
 
@@ -187,8 +188,8 @@ const addContent = async (req, res) => {
 const getAllBlogsList_user = async (req, res) => {
     try {
         const userId = req.user._id.toString();
-        const blogs = await HelpdeskModle.find({userId});
-        console.log("blogs",blogs);
+        const blogs = await HelpdeskModle.find({ userId });
+        console.log("blogs", blogs);
         const blogsDetails = blogs.map(obj => {
             return ({
                 blogindex: obj.blogindex,
@@ -235,8 +236,8 @@ const blogRequested = async (req, res) => {
     const blogId = req.params.blogindex;
     try {
         const completeBlog = await HelpdeskModle.find({ blogindex: blogId })
-        console.log("comb",completeBlog);
-        if (completeBlog.length>0) {
+        console.log("comb", completeBlog);
+        if (completeBlog.length > 0) {
             const wholeBlog = JSON.parse(JSON.stringify(completeBlog[0]))
             const blogMenus = wholeBlog.blogMenus;
             if (blogMenus) {
@@ -249,9 +250,9 @@ const blogRequested = async (req, res) => {
                 })
                 allMenus.reverse();
                 const firstMenuItem = alpha[allMenus[0].blogMenuId]
-                res.status(200).json([wholeBlog.blogHeading, allMenus, firstMenuItem,wholeBlog.userId])
+                res.status(200).json([wholeBlog.blogHeading, allMenus, firstMenuItem, wholeBlog.userId])
             } else {
-                res.status(201).json([wholeBlog.blogHeading,"","",wholeBlog.userId]);
+                res.status(201).json([wholeBlog.blogHeading, "", "", wholeBlog.userId]);
             }
         } else {
             res.status(404).json("No Blog found");
@@ -279,7 +280,7 @@ const menuRequested = async (req, res) => {
                     })
                 })
                 const menuItem = alpha[MenuId]
-                res.status(200).json([allMenus, menuItem,completeBlog[0].userId])
+                res.status(200).json([allMenus, menuItem, completeBlog[0].userId])
             } else {
                 res.status(200).json("Menu Does not exist")
             }
@@ -388,5 +389,28 @@ const deleteContent = async (req, res) => {
         return res.status(500).json({ error: 'Internal server error' });
     }
 };
+const profileUploadfn = async (req, res) => {
+    const userId = req.user._id.toString();
+    try {
+        const result = await cloudinary.uploader.upload(req.file.path, {
+            public_id: `${userId}_profile`,
+            width: 500,
+            height: 500,
+            crop: 'fill'
+        })
+        const user = await userModle.findOneAndUpdate(
+            { _id: userId },
+            { $set: { profile: result.secure_url } },
+            { new: true, upsert: true }
+        )
+        if (user && result) {
+            res.status(200).json(result.secure_url);
+        }
+    }
+    catch (err) {
+        res.status(400).json(err.message);
+    }
+}
 
-module.exports = { addBlog, addMenu, addContent, getAllBlogsList,getAllBlogsList_user, deleteBlog, blogRequested, menuRequested, deleteMenu, deleteContent };
+
+module.exports = { addBlog, addMenu, addContent, getAllBlogsList, getAllBlogsList_user, deleteBlog, blogRequested, menuRequested, deleteMenu, deleteContent, profileUploadfn };
